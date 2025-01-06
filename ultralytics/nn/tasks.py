@@ -37,6 +37,7 @@ from ultralytics.nn.modules import (
     CBFuse,
     CBLinear,
     Classify,
+    ClassifyResnet18,
     Concat,
     Conv,
     Conv2,
@@ -966,6 +967,7 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
         n = n_ = max(round(n * depth), 1) if n > 1 else n  # depth gain
         if m in {
             Classify,
+            ClassifyResnet18,
             Conv,
             ConvTranspose,
             GhostConv,
@@ -1129,7 +1131,7 @@ def guess_model_task(model):
     def cfg2task(cfg):
         """Guess from YAML dictionary."""
         m = cfg["head"][-1][-2].lower()  # output module name
-        if m in {"classify", "classifier", "cls", "fc"}:
+        if m in {"classify", "classifier", "cls", "fc", "classifyresnet18"}:
             return "classify"
         if "detect" in m:
             return "detect"
