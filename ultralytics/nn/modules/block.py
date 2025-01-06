@@ -414,7 +414,7 @@ class ResNetBlock18(nn.Module):
     def __init__(self, c1, c2, s=1):
         """Initialize convolution with given parameters."""
         super().__init__()
-        self.cv1 = Conv(c1, c2, k=3, s=s, p=1, act=True)
+        self.cv1 = Conv(c1, c2, k=3, s=s, p=1, act=nn.ReLU())
         self.cv2 = Conv(c2, c2, k=3, s=1, p=1, act=False)
         self.shortcut = nn.Sequential(Conv(c1, c2, k=1, s=s, act=False)) if s != 1 else nn.Identity()
 
@@ -433,7 +433,7 @@ class ResNetLayer18(nn.Module):
 
         if self.is_first:
             self.layer = nn.Sequential(
-                Conv(c1, c2, k=7, s=2, p=3, act=True),
+                Conv(c1, c2, k=7, s=2, p=3, act=nn.ReLU()),
                 nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
             )
         else:
