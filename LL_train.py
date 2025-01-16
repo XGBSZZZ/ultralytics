@@ -51,7 +51,7 @@ def step4_finetune():
 
 
 if __name__ == "__main__":
-    # step1_train()
+    step1_train()
     # step2_Constraint_train()
-    step3_pruning()
+    # step3_pruning()
     # step4_finetune()
