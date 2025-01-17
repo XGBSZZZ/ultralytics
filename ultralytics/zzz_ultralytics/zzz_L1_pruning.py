@@ -126,7 +126,7 @@ def do_pruning(modelpath, savepath, prune_radio):
     yolo.export(format="onnx")
 
 
-if __name__ == "__main__":
-    modelpath = "runs/detect1/14_Constraint/weights/last.pt"
-    savepath = "runs/detect1/14_Constraint/weights/last_prune.pt"
-    do_pruning(modelpath, savepath)
+# if __name__ == "__main__":
+#     modelpath = "runs/detect1/14_Constraint/weights/last.pt"
+#     savepath = "runs/detect1/14_Constraint/weights/last_prune.pt"
+#     do_pruning(modelpath, savepath)
