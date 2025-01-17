@@ -77,12 +77,12 @@ class PRUNE():
         self.prune_conv(m1, m2)
 
 
-def do_pruning(modelpath, savepath):
+def do_pruning(modelpath, savepath, prune_radio):
     pruning = PRUNE()
 
     ### 0. 加载模型
     yolo = YOLO(modelpath)  # build a new model from scratch
-    pruning.get_threshold(yolo.model, 0.8)  # 获取剪枝时bn参数的阈值，这里的0.8为剪枝率。
+    pruning.get_threshold(yolo.model, prune_radio)  # 获取剪枝时bn参数的阈值，这里的0.8为剪枝率。
 
     ### 1. 剪枝c2f 中的Bottleneck
     for name, m in yolo.model.named_modules():
@@ -94,19 +94,23 @@ def do_pruning(modelpath, savepath):
     for i in [3, 5, 7]:
         pruning.prune(seq[i], seq[i + 1])
 
-    ### 3. 对检测头进行剪枝
-    # 在P3层: seq[15]之后的网络节点与其相连的有 seq[16]、detect.cv2[0] (box分支)、detect.cv3[0] (class分支)
-    # 在P4层: seq[18]之后的网络节点与其相连的有 seq[19]、detect.cv2[1] 、detect.cv3[1]
-    # 在P5层: seq[21]之后的网络节点与其相连的有 detect.cv2[2] 、detect.cv3[2]
-    # detect: Detect = seq[-1]
-    # last_inputs = [seq[15], seq[18], seq[21]]
-    # colasts = [seq[16], seq[19], None]
-    # for last_input, colast, cv2, cv3 in zip(last_inputs, colasts, detect.cv2, detect.cv3):
-    #     pruning.prune(last_input, [colast, cv2[0], cv3[0]])
-    #     pruning.prune(cv2[0], cv2[1])
-    #     pruning.prune(cv2[1], cv2[2])
-    #     pruning.prune(cv3[0], cv3[1])
-    #     pruning.prune(cv3[1], cv3[2])
+    if yolo.task in "detect":
+        ### 3. 对检测头进行剪枝
+        # 在P3层: seq[15]之后的网络节点与其相连的有 seq[16]、detect.cv2[0] (box分支)、detect.cv3[0] (class分支)
+        # 在P4层: seq[18]之后的网络节点与其相连的有 seq[19]、detect.cv2[1] 、detect.cv3[1]
+        # 在P5层: seq[21]之后的网络节点与其相连的有 detect.cv2[2] 、detect.cv3[2]
+        print(rf"task is {yolo.task} do head prune")
+        detect: Detect = seq[-1]
+        last_inputs = [seq[15], seq[18], seq[21]]
+        colasts = [seq[16], seq[19], None]
+        for last_input, colast, cv2, cv3 in zip(last_inputs, colasts, detect.cv2, detect.cv3):
+            pruning.prune(last_input, [colast, cv2[0], cv3[0]])
+            pruning.prune(cv2[0], cv2[1])
+            pruning.prune(cv2[1], cv2[2])
+            pruning.prune(cv3[0], cv3[1])
+            pruning.prune(cv3[1], cv3[2])
+    else:
+        print(rf"task is {yolo.task} ignore head prune")
 
     ### 4. 模型梯度设置与保存
     for name, p in yolo.model.named_parameters():

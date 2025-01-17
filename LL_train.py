@@ -30,29 +30,32 @@ def else_api():
                   name=path_result, iou=0.5)  # 这里的imgsz为高宽
 
 
-def step1_train(L1_regulation=1e-2):
+def step1_train():
     model = YOLO(name_pretrain)
-    model.train(cfg=config_yaml, name=path_train, L1_regulation=L1_regulation)  # train the model
+    model.train(cfg=config_yaml, name=path_train, L1_regulation=-1)  # train the model
 
 
 # 2024.3.4添加【amp=False】
-def step2_Constraint_train():
+def step2_Constraint_train(L1_regulation=1e-2):
     model = YOLO(name_train)
-    model.train(cfg=config_yaml, amp=False, name=path_constraint_train)  # train the model
+    model.train(cfg=config_yaml, amp=False, exist_ok=True, name=path_constraint_train,
+                L1_regulation=L1_regulation)  # train the model
 
 
-def step3_pruning():
-    from LL_pruning import do_pruning
-    do_pruning(name_prune_before, name_prune_after)
+def step3_pruning(prune_radio=0.8):
+    from ultralytics.zzz_ultralytics.zzz_pruning import do_pruning
+    do_pruning(name_prune_before, name_prune_after, prune_radio)
 
 
-def step4_finetune():
+def step4_finetune(L1_finetune=True):
     model = YOLO(name_prune_after)  # load a pretrained model (recommended for training)
-    model.train(cfg=config_final_yaml, name=path_fineturn)  # train the model
+    model.train(cfg=config_final_yaml, exist_ok=True, name=path_fineturn, L1_regulation=-1,
+                L1_finetune=L1_finetune)  # train the model
+    model.export(format="onnx")
 
 
 if __name__ == "__main__":
-    step1_train()
+    # step1_train()
     # step2_Constraint_train()
     # step3_pruning()
-    # step4_finetune()
+    step4_finetune()

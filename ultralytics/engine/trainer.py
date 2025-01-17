@@ -232,6 +232,13 @@ class BaseTrainer:
         # Model
         self.run_callbacks("on_pretrain_routine_start")
         ckpt = self.setup_model()
+
+        # add_zzz 新增
+        if self.args.get("L1_finetune", False):
+            for name, parm in self.model.named_parameters():
+                parm.requires_grad = False
+        # add_zzz 新增
+
         self.model = self.model.to(self.device)
         self.set_model_attributes()
 
