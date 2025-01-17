@@ -7,6 +7,7 @@ import os
 root = os.getcwd()
 # 配置文件路径
 config_yaml = os.path.join(root, "custom_data/config.yaml")
+config_final_yaml = os.path.join(root, "custom_data/config_fine.yaml")
 name_pretrain = os.path.join(root, "custom_data/yolov8n-cls.pt")
 # 原始训练路径
 path_train = os.path.join(root, "runs/pruning/source")
@@ -16,7 +17,7 @@ path_constraint_train = os.path.join(root, "runs/pruning/dataset_Constraint")
 name_prune_before = os.path.join(path_constraint_train, "weights/last.pt")
 name_prune_after = os.path.join(path_constraint_train, "weights/last_prune.pt")
 # 微调路径
-path_fineturn = os.path.join(root, "runs/detect/dataset_finetune")
+path_fineturn = os.path.join(root, "runs/pruning/dataset_finetune")
 
 
 def else_api():
@@ -47,11 +48,11 @@ def step3_pruning():
 
 def step4_finetune():
     model = YOLO(name_prune_after)  # load a pretrained model (recommended for training)
-    model.train(cfg=config_yaml, name=path_fineturn)  # train the model
+    model.train(cfg=config_final_yaml, name=path_fineturn)  # train the model
 
 
 if __name__ == "__main__":
     # step1_train()
     # step2_Constraint_train()
-    step3_pruning()
-    # step4_finetune()
+    # step3_pruning()
+    step4_finetune()
