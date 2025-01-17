@@ -12,7 +12,7 @@ __pycache__/
 
 # Distribution / packaging
 .Python
-custom_data/
+zzz_data/
 build/
 develop-eggs/
 dist/

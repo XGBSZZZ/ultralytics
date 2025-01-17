@@ -6,9 +6,9 @@ import os
 
 root = os.getcwd()
 # 配置文件路径
-config_yaml = os.path.join(root, "custom_data/config.yaml")
-config_final_yaml = os.path.join(root, "custom_data/config_fine.yaml")
-name_pretrain = os.path.join(root, "custom_data/yolov8n-cls.pt")
+config_yaml = os.path.join(root, "zzz_data/config.yaml")
+config_final_yaml = os.path.join(root, "zzz_data/config_fine.yaml")
+name_pretrain = os.path.join(root, "zzz_data/yolov8n-cls.pt")
 # 原始训练路径
 path_train = os.path.join(root, "runs/pruning/source")
 name_train = os.path.join(path_train, "weights/last.pt")
