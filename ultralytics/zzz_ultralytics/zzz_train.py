@@ -66,11 +66,12 @@ def step4_finetune(cfg, L1_finetune=True):
     model.export(format="onnx")
 
 
-def zzz_train(normal_train=True, normal_Constraint_model_yaml=None, normal_Constraint_model_path=None, cfg_normal=None,
+def zzz_train(normal_train=True, Constraint_train=True, normal_Constraint_model_yaml=None, normal_Constraint_model_path=None, cfg_normal=None,
               cfg_finetune=None, prune_radio=0.8):
     if normal_train:
         step1_train(cfg_normal, normal_Constraint_model_yaml, normal_Constraint_model_path)
-    step2_Constraint_train(cfg_normal, normal_Constraint_model_yaml, normal_Constraint_model_path)
+    if Constraint_train:
+        step2_Constraint_train(cfg_normal, normal_Constraint_model_yaml, normal_Constraint_model_path)
     step3_pruning(prune_radio)
     step4_finetune(cfg_finetune)
 
