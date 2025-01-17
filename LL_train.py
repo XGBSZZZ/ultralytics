@@ -6,8 +6,8 @@ import os
 
 root = os.getcwd()
 # 配置文件路径
-config_yaml = os.path.join(root, "config.yaml")
-name_pretrain = os.path.join(root, "yolov8n-cls.pt")
+config_yaml = os.path.join(root, "custom_data/config.yaml")
+name_pretrain = os.path.join(root, "custom_data/yolov8n-cls.pt")
 # 原始训练路径
 path_train = os.path.join(root, "runs/pruning/source")
 name_train = os.path.join(path_train, "weights/last.pt")
@@ -51,7 +51,7 @@ def step4_finetune():
 
 
 if __name__ == "__main__":
-    step1_train()
+    # step1_train()
     # step2_Constraint_train()
-    # step3_pruning()
+    step3_pruning()
     # step4_finetune()
