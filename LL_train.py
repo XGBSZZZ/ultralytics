@@ -30,9 +30,9 @@ def else_api():
                   name=path_result, iou=0.5)  # 这里的imgsz为高宽
 
 
-def step1_train():
+def step1_train(L1_regulation=1e-2):
     model = YOLO(name_pretrain)
-    model.train(cfg=config_yaml, name=path_train)  # train the model
+    model.train(cfg=config_yaml, name=path_train, L1_regulation=L1_regulation)  # train the model
 
 
 # 2024.3.4添加【amp=False】
@@ -52,7 +52,7 @@ def step4_finetune():
 
 
 if __name__ == "__main__":
-    # step1_train()
+    step1_train()
     # step2_Constraint_train()
     # step3_pruning()
-    step4_finetune()
+    # step4_finetune()

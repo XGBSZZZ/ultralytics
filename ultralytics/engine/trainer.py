@@ -387,6 +387,15 @@ class BaseTrainer:
                 # Backward
                 self.scaler.scale(self.loss).backward()
 
+                # zzz L1_regulation1
+                if (L1_regulation := self.args.get("L1_regulation", -1)) > 0:
+                    l1_lambda = L1_regulation * (1 - 0.9 * epoch / self.epochs)
+                    for k, m in self.model.named_modules():
+                        if isinstance(m, nn.BatchNorm2d):
+                            m.weight.grad.data.add_(l1_lambda * torch.sign(m.weight.data))
+                            m.bias.grad.data.add_(1e-2 * torch.sign(m.bias.data))
+                # zzz L1_regulation
+
                 # Optimize - https://pytorch.org/docs/master/notes/amp_examples.html
                 if ni - last_opt_step >= self.accumulate:
                     self.optimizer_step()
