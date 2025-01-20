@@ -121,7 +121,7 @@ def do_pruning(modelpath, savepath, prune_radio):
     yolo.model.pt_path = yolo.model.pt_path.replace("last.pt", os.path.basename(savepath))
     yolo.export(format="onnx")
 
-    ## 重新load模型，修改保存命名，用以比较剪枝前后的onnx的大小
+    # 重新load模型，修改保存命名，用以比较剪枝前后的onnx的大小
     yolo = YOLO(modelpath)  # build a new model from scratch
     yolo.export(format="onnx")
 
