@@ -91,7 +91,7 @@ def do_pruning(modelpath, savepath, prune_radio):
 
     # 2. 指定剪枝不同模块之间的卷积核
     seq = yolo.model.model
-    for i in [3, 5, 7]:
+    for i in [3, 5, 7, 8]:
         pruning.prune(seq[i], seq[i + 1])
 
     if yolo.task in "detect":
@@ -99,10 +99,19 @@ def do_pruning(modelpath, savepath, prune_radio):
         # 在P3层: seq[15]之后的网络节点与其相连的有 seq[16]、detect.cv2[0] (box分支)、detect.cv3[0] (class分支)
         # 在P4层: seq[18]之后的网络节点与其相连的有 seq[19]、detect.cv2[1] 、detect.cv3[1]
         # 在P5层: seq[21]之后的网络节点与其相连的有 detect.cv2[2] 、detect.cv3[2]
-        print(rf"task is {yolo.task} do head prune")
+
         detect: Detect = seq[-1]
-        last_inputs = [seq[15], seq[18], seq[21]]
-        colasts = [seq[16], seq[19], None]
+        if len(seq) == 23:
+            print(rf"task is {yolo.task}-normal do head prune")
+            last_inputs = [seq[15], seq[18], seq[21]]
+            colasts = [seq[16], seq[19], None]
+        elif len(seq) == 29:
+            print(rf"task is {yolo.task}-p2 do head prune")
+            last_inputs = [seq[18], seq[21], seq[24], seq[27]]
+            colasts = [seq[19], seq[22], seq[25], None]
+        else:
+            raise rf"unknow model type detect - len(seq) {len(seq)} layer"
+
         for last_input, colast, cv2, cv3 in zip(last_inputs, colasts, detect.cv2, detect.cv3):
             pruning.prune(last_input, [colast, cv2[0], cv3[0]])
             pruning.prune(cv2[0], cv2[1])
@@ -124,7 +133,6 @@ def do_pruning(modelpath, savepath, prune_radio):
     # 重新load模型，修改保存命名，用以比较剪枝前后的onnx的大小
     yolo = YOLO(modelpath)  # build a new model from scratch
     yolo.export(format="onnx")
-
 
 # if __name__ == "__main__":
 #     modelpath = "runs/detect1/14_Constraint/weights/last.pt"
