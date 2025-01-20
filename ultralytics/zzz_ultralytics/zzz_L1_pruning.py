@@ -27,13 +27,13 @@ class PRUNE():
         self.threshold = torch.sort(ws, descending=True)[0][int(len(ws) * factor)]
 
     def prune_conv(self, conv1: Conv, conv2: Conv):
-        ## a. 根据BN中的参数，获取需要保留的index================
+        # a. 根据BN中的参数，获取需要保留的index================
         gamma = conv1.bn.weight.data.detach()
         beta = conv1.bn.bias.data.detach()
 
         keep_idxs = []
         local_threshold = self.threshold
-        while len(keep_idxs) < 8:  ## 若剩余卷积核<8, 则降低阈值重新筛选
+        while len(keep_idxs) < 8:  # 若剩余卷积核<8, 则降低阈值重新筛选
             keep_idxs = torch.where(gamma.abs() >= local_threshold)[0]
             local_threshold = local_threshold * 0.5
         n = len(keep_idxs)
@@ -41,7 +41,7 @@ class PRUNE():
         print(n / len(gamma) * 100)
         # scale = len(idxs) / n
 
-        ## b. 利用index对BN进行剪枝============================
+        # b. 利用index对BN进行剪枝============================
         conv1.bn.weight.data = gamma[keep_idxs]
         conv1.bn.bias.data = beta[keep_idxs]
         conv1.bn.running_var.data = conv1.bn.running_var.data[keep_idxs]
@@ -50,11 +50,11 @@ class PRUNE():
         conv1.conv.weight.data = conv1.conv.weight.data[keep_idxs]
         conv1.conv.out_channels = n
 
-        ## c. 利用index对conv1进行剪枝=========================
+        # c. 利用index对conv1进行剪枝=========================
         if conv1.conv.bias is not None:
             conv1.conv.bias.data = conv1.conv.bias.data[keep_idxs]
 
-        ## d. 利用index对conv2进行剪枝=========================
+        # d. 利用index对conv2进行剪枝=========================
         if not isinstance(conv2, list):
             conv2 = [conv2]
         for item in conv2:
@@ -84,7 +84,7 @@ def do_pruning(modelpath, savepath, prune_radio):
     yolo = YOLO(modelpath)  # build a new model from scratch
     pruning.get_threshold(yolo.model, prune_radio)  # 获取剪枝时bn参数的阈值，这里的0.8为剪枝率。
 
-    ### 1. 剪枝c2f 中的Bottleneck
+    # 1. 剪枝c2f 中的Bottleneck
     for name, m in yolo.model.named_modules():
         if isinstance(m, Bottleneck):
             pruning.prune_conv(m.cv1, m.cv2)
