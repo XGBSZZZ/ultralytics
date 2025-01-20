@@ -80,7 +80,7 @@ class PRUNE():
 def do_pruning(modelpath, savepath, prune_radio):
     pruning = PRUNE()
 
-    ### 0. 加载模型
+    # 0. 加载模型
     yolo = YOLO(modelpath)  # build a new model from scratch
     pruning.get_threshold(yolo.model, prune_radio)  # 获取剪枝时bn参数的阈值，这里的0.8为剪枝率。
 
@@ -89,13 +89,13 @@ def do_pruning(modelpath, savepath, prune_radio):
         if isinstance(m, Bottleneck):
             pruning.prune_conv(m.cv1, m.cv2)
 
-    ### 2. 指定剪枝不同模块之间的卷积核
+    # 2. 指定剪枝不同模块之间的卷积核
     seq = yolo.model.model
     for i in [3, 5, 7]:
         pruning.prune(seq[i], seq[i + 1])
 
     if yolo.task in "detect":
-        ### 3. 对检测头进行剪枝
+        # 3. 对检测头进行剪枝
         # 在P3层: seq[15]之后的网络节点与其相连的有 seq[16]、detect.cv2[0] (box分支)、detect.cv3[0] (class分支)
         # 在P4层: seq[18]之后的网络节点与其相连的有 seq[19]、detect.cv2[1] 、detect.cv3[1]
         # 在P5层: seq[21]之后的网络节点与其相连的有 detect.cv2[2] 、detect.cv3[2]
@@ -112,7 +112,7 @@ def do_pruning(modelpath, savepath, prune_radio):
     else:
         print(rf"task is {yolo.task} ignore head prune")
 
-    ### 4. 模型梯度设置与保存
+    # 4. 模型梯度设置与保存
     for name, p in yolo.model.named_parameters():
         p.requires_grad = True
 
