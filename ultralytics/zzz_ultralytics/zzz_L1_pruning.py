@@ -25,17 +25,23 @@ class PRUNE():
         # keep
         ws = torch.cat(ws)
         self.threshold = torch.sort(ws, descending=True)[0][int(len(ws) * factor)]
+        print(rf"threshold {self.threshold}")
 
     def prune_conv(self, conv1: Conv, conv2: Conv):
         # a. 根据BN中的参数，获取需要保留的index================
         gamma = conv1.bn.weight.data.detach()
         beta = conv1.bn.bias.data.detach()
 
-        keep_idxs = []
-        local_threshold = self.threshold
-        while len(keep_idxs) < 8:  # 若剩余卷积核<8, 则降低阈值重新筛选
-            keep_idxs = torch.where(gamma.abs() >= local_threshold)[0]
-            local_threshold = local_threshold * 0.5
+        keep_idxs = torch.where(gamma.abs() >= self.threshold)[0]
+        if len(keep_idxs) < 8:
+            keep_idxs = gamma.argsort(descending=True)[:8]
+
+        # keep_idxs = []
+        # local_threshold = self.threshold
+        # while len(keep_idxs) < 8:  # 若剩余卷积核<8, 则降低阈值重新筛选
+        #     keep_idxs = torch.where(gamma.abs() >= local_threshold)[0]
+        #     local_threshold = local_threshold * 0.5
+
         n = len(keep_idxs)
         # n = max(int(len(idxs) * 0.8), p)
         print(n / len(gamma) * 100)
@@ -82,7 +88,7 @@ def do_pruning(modelpath, savepath, prune_radio):
 
     # 0. 加载模型
     yolo = YOLO(modelpath)  # build a new model from scratch
-    pruning.get_threshold(yolo.model, prune_radio)  # 获取剪枝时bn参数的阈值，这里的0.8为剪枝率。
+    pruning.get_threshold(yolo.model, prune_radio)
 
     # 1. 剪枝c2f 中的Bottleneck
     for name, m in yolo.model.named_modules():
@@ -102,9 +108,14 @@ def do_pruning(modelpath, savepath, prune_radio):
 
         detect: Detect = seq[-1]
         if len(seq) == 23:
-            print(rf"task is {yolo.task}-normal do head prune")
-            last_inputs = [seq[15], seq[18], seq[21]]
-            colasts = [seq[16], seq[19], None]
+            if len(detect.cv2) == 3:
+                print(rf"task is {yolo.task}-normal do head prune")
+                last_inputs = [seq[15], seq[18], seq[21]]
+                colasts = [seq[16], seq[19], None]
+            elif len(detect.cv2) == 2:
+                print(rf"task is {yolo.task}-45 do head prune")
+                last_inputs = [seq[18], seq[21]]
+                colasts = [seq[19], None]
         elif len(seq) == 26:
             print(rf"task is {yolo.task}-p2n5 do head prune")
             last_inputs = [seq[18], seq[21], seq[24]]
@@ -129,7 +140,9 @@ def do_pruning(modelpath, savepath, prune_radio):
     for name, p in yolo.model.named_parameters():
         p.requires_grad = True
 
-    yolo.val()
+    if os.path.exists("dataset.yaml"):
+        yolo.val()
+
     torch.save(yolo.ckpt, savepath)
     yolo.model.pt_path = yolo.model.pt_path.replace("last.pt", os.path.basename(savepath))
     yolo.export(format="onnx")
