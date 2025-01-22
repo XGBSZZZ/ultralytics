@@ -9,4 +9,4 @@ config_finetune_yaml = os.path.join(root, "zzz_data/config.yaml")
 name_pretrain = os.path.join(root, "zzz_data/yolov8n-cls.pt")
 
 if __name__ == "__main__":
-    zzz_train(True, None, name_pretrain, config_yaml, config_finetune_yaml, 0.5)
+    zzz_train(False, True, None, name_pretrain, config_yaml, config_finetune_yaml, 0.5)
