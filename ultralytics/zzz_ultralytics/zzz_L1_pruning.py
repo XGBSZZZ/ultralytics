@@ -105,6 +105,10 @@ def do_pruning(modelpath, savepath, prune_radio):
             print(rf"task is {yolo.task}-normal do head prune")
             last_inputs = [seq[15], seq[18], seq[21]]
             colasts = [seq[16], seq[19], None]
+        elif len(seq) == 26:
+            print(rf"task is {yolo.task}-p2n5 do head prune")
+            last_inputs = [seq[18], seq[21], seq[24]]
+            colasts = [seq[19], seq[22], None]
         elif len(seq) == 29:
             print(rf"task is {yolo.task}-p2 do head prune")
             last_inputs = [seq[18], seq[21], seq[24], seq[27]]
