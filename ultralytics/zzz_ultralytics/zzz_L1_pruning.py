@@ -107,7 +107,10 @@ def do_pruning(modelpath, savepath, prune_radio):
         # 在P5层: seq[21]之后的网络节点与其相连的有 detect.cv2[2] 、detect.cv3[2]
 
         detect: Detect = seq[-1]
-        if len(seq) == 23:
+        if len(seq) == 20:
+            last_inputs = [seq[15], seq[18]]
+            colasts = [seq[16], None]
+        elif len(seq) == 23:
             if len(detect.cv2) == 3:
                 print(rf"task is {yolo.task}-normal do head prune")
                 last_inputs = [seq[15], seq[18], seq[21]]
