@@ -73,6 +73,7 @@ def zzz_train(normal_train=True, Constraint_train=True, normal_Constraint_model_
     if Constraint_train:
         step2_Constraint_train(cfg_normal, normal_Constraint_model_yaml, normal_Constraint_model_path)
     step3_pruning(prune_radio)
+    print("if step4 is cpu train,please solo execute step4")
     step4_finetune(cfg_finetune)
 
 # if __name__ == "__main__":
