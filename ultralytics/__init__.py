@@ -1,6 +1,6 @@
 # Ultralytics YOLO 🚀, AGPL-3.0 license
 
-__version__ = "6.8.3.48"
+__version__ = "7.8.3.48"
 
 import os
 

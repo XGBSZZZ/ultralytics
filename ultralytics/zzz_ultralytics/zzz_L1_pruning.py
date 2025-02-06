@@ -97,7 +97,12 @@ def do_pruning(modelpath, savepath, prune_radio):
 
     # 2. 指定剪枝不同模块之间的卷积核
     seq = yolo.model.model
-    for i in [3, 5, 7, 8]:
+    if yolo.task in "classify":
+        module_list = [3, 5, 7]
+    else:
+        module_list = [3, 5, 7, 8]
+
+    for i in module_list:
         pruning.prune(seq[i], seq[i + 1])
 
     if yolo.task in "detect":
