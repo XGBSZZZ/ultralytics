@@ -236,7 +236,8 @@ class BaseTrainer:
         # add_zzz 新增
         if self.args.get("L1_finetune", False):
             for name, parm in self.model.named_parameters():
-                parm.requires_grad = False
+                if name == "model.22.dfl.conv.weight":
+                    parm.requires_grad = False
         # add_zzz 新增
 
         self.model = self.model.to(self.device)
