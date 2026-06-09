@@ -2303,7 +2303,9 @@ def v8_transforms(dataset, imgsz, hyp, stretch=False):
         pre_transform=None if stretch else LetterBox(new_shape=(imgsz, imgsz)),
     )
 
-    pre_transform = Compose([mosaic, affine])
+    # add_zzz
+    zzz_add_label_roi_flip = ZZZAddLabelRoiFlip(dataset, hyp.get("fliproi", 0), hyp.get("fliproi_names", []))
+    pre_transform = Compose([zzz_add_label_roi_flip, mosaic, affine])
     if hyp.copy_paste_mode == "flip":
         pre_transform.insert(1, CopyPaste(p=hyp.copy_paste, mode=hyp.copy_paste_mode))
     else:
@@ -2334,6 +2336,71 @@ def v8_transforms(dataset, imgsz, hyp, stretch=False):
             RandomFlip(direction="horizontal", p=hyp.fliplr, flip_idx=flip_idx),
         ]
     )  # transforms
+
+
+# add_zzz_dataset
+# ZZZAddLabelRoiFlip 仅在训练hbb模型启用 对图片中特定标签的矩形标注随机进行cv2的180°翻转、左右翻转、上下翻转3种方式
+class ZZZAddLabelRoiFlip:
+    def __init__(self, dataset, p=0.0, fliproi_names=[]) -> None:
+        if p > 0.0:
+            LOGGER.info(f"WARNING ⚠️ Using ZZZAddLabelRoiFlip with p={p}")
+            LOGGER.info(f"WARNING ⚠️ Using ZZZAddLabelRoiFlip with p={p}")
+            LOGGER.info(f"WARNING ⚠️ Using ZZZAddLabelRoiFlip with p={p}")
+            LOGGER.info(f"WARNING ⚠️ Using ZZZAddLabelRoiFlip with p={p}")
+            LOGGER.info(f"WARNING ⚠️ Using ZZZAddLabelRoiFlip with p={p}")
+            LOGGER.info(f"WARNING ⚠️ Using ZZZAddLabelRoiFlip with p={p}")
+
+        self.p = p
+        classes = dataset.data.get("names")
+        self.flip_idx = list()
+
+        for name in fliproi_names:
+            for i, name_ in classes.items():
+                if name_ == name:
+                    self.flip_idx.append(i)
+
+        if len(self.flip_idx) != len(fliproi_names):
+            raise ValueError(f"data.yaml fliproi_names={fliproi_names} not in classes={classes}")
+
+    def __call__(self, labels):
+        if len(labels["instances"].segments) != 0 or random.uniform(0, 1) > self.p:
+            return labels
+
+        img = labels["img"]
+        cls = labels["cls"]
+        bbox = labels["instances"].bboxes
+        h, w = img.shape[:2]
+
+        for cls_i, box in zip(cls, bbox):
+            # 归一化坐标 [x_center, y_center, width, height] → 像素坐标
+            x_c, y_c, bw, bh = box
+            x1 = int((x_c - bw / 2) * w)
+            y1 = int((y_c - bh / 2) * h)
+            x2 = int((x_c + bw / 2) * w)
+            y2 = int((y_c + bh / 2) * h)
+
+            # 边界安全裁剪，防止越界
+            x1 = max(0, x1)
+            y1 = max(0, y1)
+            x2 = min(w, x2)
+            y2 = min(h, y2)
+
+            # 提取 ROI
+            roi_img = img[y1:y2, x1:x2]
+
+            # 对需要增强的类别进行随机翻转
+            if cls_i in self.flip_idx:
+                if random.uniform(0, 1) > 0.5:
+                    roi_img = cv2.flip(roi_img, 0)  # 垂直翻转
+                if random.uniform(0, 1) > 0.5:
+                    roi_img = cv2.flip(roi_img, 1)  # 水平翻转
+                if random.uniform(0, 1) > 0.5:
+                    roi_img = cv2.flip(roi_img, cv2.ROTATE_180)  # 180度旋转
+
+            # 注意：此处 roi_img 仅为局部变量，如需回填到原图或保存，
+            img[y1:y2, x1:x2] = roi_img
+
+        return labels
 
 
 # Classification augmentations -----------------------------------------------------------------------------------------
