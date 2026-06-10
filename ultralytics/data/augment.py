@@ -2346,9 +2346,9 @@ class ZZZRotate:
 
     def __init__(self, p=0.0):
         if p > 0.0:
-            LOGGER.info(f"WARNING ⚠️ Using ZZZAddLabelRoiFlip with p={p}")
-            LOGGER.info(f"WARNING ⚠️ Using ZZZAddLabelRoiFlip with p={p}")
-            LOGGER.info(f"WARNING ⚠️ Using ZZZAddLabelRoiFlip with p={p}")
+            LOGGER.info(f"WARNING ⚠️ Using ZZZRotate with p={p}")
+            LOGGER.info(f"WARNING ⚠️ Using ZZZRotate with p={p}")
+            LOGGER.info(f"WARNING ⚠️ Using ZZZRotate with p={p}")
 
         self.p = p
 
