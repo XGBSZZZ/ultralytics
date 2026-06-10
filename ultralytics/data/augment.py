@@ -2305,7 +2305,8 @@ def v8_transforms(dataset, imgsz, hyp, stretch=False):
 
     # add_zzz
     zzz_add_label_roi_flip = ZZZAddLabelRoiFlip(dataset, hyp.get("fliproi", 0), hyp.get("fliproi_names", []))
-    pre_transform = Compose([zzz_add_label_roi_flip, mosaic, affine])
+    zzz_rotate = ZZZRotate(hyp.get("zzzrotate", 0))
+    pre_transform = Compose([zzz_add_label_roi_flip, zzz_rotate, mosaic, affine])
     if hyp.copy_paste_mode == "flip":
         pre_transform.insert(1, CopyPaste(p=hyp.copy_paste, mode=hyp.copy_paste_mode))
     else:
@@ -2339,13 +2340,100 @@ def v8_transforms(dataset, imgsz, hyp, stretch=False):
 
 
 # add_zzz_dataset
-# ZZZAddLabelRoiFlip 仅在训练hbb模型启用 对图片中特定标签的矩形标注随机进行cv2的180°翻转、左右翻转、上下翻转3种方式
-class ZZZAddLabelRoiFlip:
-    def __init__(self, dataset, p=0.0, fliproi_names=[], pad_value=114, allow_pad=5) -> None:
+# ZZZRotate 仅对全图旋转3个角度 90、180、270 参考class Albumentations来完成
+class ZZZRotate:
+    """随机旋转整图 90/180/270，仅支持 HBB"""
+
+    def __init__(self, p=0.0):
         if p > 0.0:
             LOGGER.info(f"WARNING ⚠️ Using ZZZAddLabelRoiFlip with p={p}")
             LOGGER.info(f"WARNING ⚠️ Using ZZZAddLabelRoiFlip with p={p}")
             LOGGER.info(f"WARNING ⚠️ Using ZZZAddLabelRoiFlip with p={p}")
+
+        self.p = p
+
+    def __call__(self, labels):
+        if random.random() > self.p:
+            return labels
+
+        img = labels["img"]
+        instances = labels["instances"]
+
+        # HBB only
+        assert len(instances.segments) == 0, \
+            "ZZZRotate only supports HBB, segments found."
+
+        assert instances.keypoints is None, \
+            "ZZZRotate only supports HBB, keypoints found."
+
+        if hasattr(instances, "obb"):
+            assert instances.obb is None or len(instances.obb) == 0, \
+                "ZZZRotate only supports HBB, OBB found."
+
+        if len(instances.bboxes):
+            assert instances.bboxes.shape[1] == 4, \
+                f"ZZZRotate only supports HBB, got bbox shape {instances.bboxes.shape}"
+
+        h, w = img.shape[:2]
+
+        # 90 180 270
+        k = random.randint(1, 3)
+
+        # 旋转图像
+        img = np.ascontiguousarray(np.rot90(img, k))
+
+        # 转成绝对坐标 xyxy
+        instances.convert_bbox(format="xyxy")
+        instances.denormalize(w, h)
+
+        boxes = instances.bboxes.copy()
+
+        x1 = boxes[:, 0].copy()
+        y1 = boxes[:, 1].copy()
+        x2 = boxes[:, 2].copy()
+        y2 = boxes[:, 3].copy()
+
+        if k == 1:
+            # 90° CCW
+            boxes[:, 0] = y1
+            boxes[:, 1] = w - x2
+            boxes[:, 2] = y2
+            boxes[:, 3] = w - x1
+
+
+        elif k == 2:
+            # 180°
+            boxes[:, 0] = w - x2
+            boxes[:, 1] = h - y2
+            boxes[:, 2] = w - x1
+            boxes[:, 3] = h - y1
+
+        else:
+            # 270° CCW
+            boxes[:, 0] = h - y2
+            boxes[:, 1] = x1
+            boxes[:, 2] = h - y1
+            boxes[:, 3] = x2
+
+        # 重新创建 Instances
+        labels["instances"] = Instances(
+            bboxes=boxes,
+            segments=np.empty((0, 0, 2), dtype=np.float32),
+            keypoints=None,
+            bbox_format="xyxy",
+            normalized=False,
+        )
+
+        labels["img"] = img
+        labels["resized_shape"] = img.shape[:2]
+
+        return labels
+
+
+# ZZZAddLabelRoiFlip 仅在训练hbb模型启用 对图片中特定标签的矩形标注随机进行cv2的180°翻转、左右翻转、上下翻转3种方式
+class ZZZAddLabelRoiFlip:
+    def __init__(self, dataset, p=0.0, fliproi_names=[], pad_value=114, allow_pad=5) -> None:
+        if p > 0.0:
             LOGGER.info(f"WARNING ⚠️ Using ZZZAddLabelRoiFlip with p={p}")
             LOGGER.info(f"WARNING ⚠️ Using ZZZAddLabelRoiFlip with p={p}")
             LOGGER.info(f"WARNING ⚠️ Using ZZZAddLabelRoiFlip with p={p}")
@@ -2432,10 +2520,10 @@ class ZZZAddLabelRoiFlip:
 
             # 随机翻转
             aug = roi_isolated
-            if random.uniform(0, 1) > 0.5:
-                aug = cv2.flip(aug, 0)
-            if random.uniform(0, 1) > 0.5:
-                aug = cv2.flip(aug, 1)
+            # if random.uniform(0, 1) > 0.5:
+            #     aug = cv2.flip(aug, 0)
+            # if random.uniform(0, 1) > 0.5:
+            #     aug = cv2.flip(aug, 1)
             if random.uniform(0, 1) > 0.5:
                 aug = cv2.flip(aug, -1)
 

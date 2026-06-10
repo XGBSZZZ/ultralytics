@@ -130,3 +130,4 @@ L1_regulation: -1 # (int) 0.01 or <= 0
 L1_finetune: False # 微调
 fliproi: 0.0 # 标注区域旋转
 fliproi_names: [] # 哪些标签旋转
+zzzrotate: 0.0 # 3个角度的图片旋转
