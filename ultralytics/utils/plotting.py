@@ -1016,7 +1016,7 @@ def plot_images(
     fname: str = "images.jpg",
     names: Optional[Dict[int, str]] = None,
     on_plot: Optional[Callable] = None,
-    max_size: int = 1920,
+    max_size: int = 1280 * 10,
     max_subplots: int = 16,
     save: bool = True,
     conf_thres: float = 0.25,

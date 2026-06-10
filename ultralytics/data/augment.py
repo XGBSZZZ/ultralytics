@@ -2341,7 +2341,7 @@ def v8_transforms(dataset, imgsz, hyp, stretch=False):
 # add_zzz_dataset
 # ZZZAddLabelRoiFlip 仅在训练hbb模型启用 对图片中特定标签的矩形标注随机进行cv2的180°翻转、左右翻转、上下翻转3种方式
 class ZZZAddLabelRoiFlip:
-    def __init__(self, dataset, p=0.0, fliproi_names=[]) -> None:
+    def __init__(self, dataset, p=0.0, fliproi_names=[], pad_value=114, allow_pad=5) -> None:
         if p > 0.0:
             LOGGER.info(f"WARNING ⚠️ Using ZZZAddLabelRoiFlip with p={p}")
             LOGGER.info(f"WARNING ⚠️ Using ZZZAddLabelRoiFlip with p={p}")
@@ -2353,6 +2353,8 @@ class ZZZAddLabelRoiFlip:
         self.p = p
         classes = dataset.data.get("names")
         self.flip_idx = list()
+        self.pad_value = pad_value
+        self.allow_pad = allow_pad
 
         for name in fliproi_names:
             for i, name_ in classes.items():
@@ -2371,34 +2373,79 @@ class ZZZAddLabelRoiFlip:
         bbox = labels["instances"].bboxes
         h, w = img.shape[:2]
 
-        for cls_i, box in zip(cls, bbox):
-            # 归一化坐标 [x_center, y_center, width, height] → 像素坐标
+        boxes_px = []
+        for box in bbox:
             x_c, y_c, bw, bh = box
             x1 = int((x_c - bw / 2) * w)
             y1 = int((y_c - bh / 2) * h)
             x2 = int((x_c + bw / 2) * w)
             y2 = int((y_c + bh / 2) * h)
-
-            # 边界安全裁剪，防止越界
             x1 = max(0, x1)
             y1 = max(0, y1)
             x2 = min(w, x2)
             y2 = min(h, y2)
+            boxes_px.append((x1, y1, x2, y2))
 
-            # 提取 ROI
-            roi_img = img[y1:y2, x1:x2]
+        for idx, (cls_i, (x1, y1, x2, y2)) in enumerate(zip(cls, boxes_px)):
+            if cls_i not in self.flip_idx:
+                continue
 
-            # 对需要增强的类别进行随机翻转
-            if cls_i in self.flip_idx:
-                if random.uniform(0, 1) > 0.5:
-                    roi_img = cv2.flip(roi_img, 0)  # 垂直翻转
-                if random.uniform(0, 1) > 0.5:
-                    roi_img = cv2.flip(roi_img, 1)  # 水平翻转
-                if random.uniform(0, 1) > 0.5:
-                    roi_img = cv2.flip(roi_img, cv2.ROTATE_180)  # 180度旋转
+            roi = img[y1:y2, x1:x2]
+            roi_h, roi_w = roi.shape[:2]
+            roi_area = roi_h * roi_w
+            if roi_area == 0:
+                continue
 
-            # 注意：此处 roi_img 仅为局部变量，如需回填到原图或保存，
-            img[y1:y2, x1:x2] = roi_img
+            # 生成重叠掩膜
+            overlap_mask = np.zeros((roi_h, roi_w), dtype=np.uint8)
+            for other_idx, (ox1, oy1, ox2, oy2) in enumerate(boxes_px):
+                if other_idx == idx:
+                    continue
+                inter_x1 = max(x1, ox1)
+                inter_y1 = max(y1, oy1)
+                inter_x2 = min(x2, ox2)
+                inter_y2 = min(y2, oy2)
+                if inter_x1 < inter_x2 and inter_y1 < inter_y2:
+                    roi_ox1 = inter_x1 - x1
+                    roi_oy1 = inter_y1 - y1
+                    roi_ox2 = inter_x2 - x1
+                    roi_oy2 = inter_y2 - y1
+                    overlap_mask[roi_oy1:roi_oy2, roi_ox1:roi_ox2] = 1
+
+            # 计算重叠面积
+            overlap_area = np.count_nonzero(overlap_mask)
+
+            # 如果重叠面积超过 ROI 总面积的 1 / self.allow_pad，跳过此框
+            if overlap_area > roi_area / self.allow_pad:
+                continue
+
+            non_overlap = (overlap_mask == 0)
+            if not np.any(non_overlap):
+                continue
+
+            # 复制并用self.pad_value 填充重叠区域
+            roi_isolated = roi.copy()
+            if len(img.shape) == 3 and img.shape[2] == 3:
+                roi_isolated[overlap_mask == 1] = (self.pad_value, self.pad_value, self.pad_value)
+            else:
+                roi_isolated[overlap_mask == 1] = self.pad_value
+
+            # 随机翻转
+            aug = roi_isolated
+            if random.uniform(0, 1) > 0.5:
+                aug = cv2.flip(aug, 0)
+            if random.uniform(0, 1) > 0.5:
+                aug = cv2.flip(aug, 1)
+            if random.uniform(0, 1) > 0.5:
+                aug = cv2.flip(aug, -1)
+
+            # 只将非重叠区域的增强像素写回
+            if len(img.shape) == 3 and img.shape[2] == 3:
+                roi = np.where(non_overlap[..., None], aug, roi)
+            else:
+                roi = np.where(non_overlap, aug, roi)
+
+            img[y1:y2, x1:x2] = roi
 
         return labels
 
