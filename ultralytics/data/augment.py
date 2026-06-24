@@ -2306,7 +2306,8 @@ def v8_transforms(dataset, imgsz, hyp, stretch=False):
     # add_zzz
     zzz_add_label_roi_flip = ZZZAddLabelRoiFlip(dataset, hyp.get("fliproi", 0), hyp.get("fliproi_names", []))
     zzz_rotate = ZZZRotate(hyp.get("zzzrotate", 0))
-    pre_transform = Compose([zzz_add_label_roi_flip, zzz_rotate, mosaic, affine])
+    zzz_hide_label = ZZZHideLabel(dataset, hyp.get("zzzhide", 0))
+    pre_transform = Compose([zzz_add_label_roi_flip, zzz_hide_label, zzz_rotate, mosaic, affine])
     if hyp.copy_paste_mode == "flip":
         pre_transform.insert(1, CopyPaste(p=hyp.copy_paste, mode=hyp.copy_paste_mode))
     else:
@@ -2534,6 +2535,88 @@ class ZZZAddLabelRoiFlip:
                 roi = np.where(non_overlap, aug, roi)
 
             img[y1:y2, x1:x2] = roi
+
+        return labels
+
+
+class ZZZHideLabel:
+    def __init__(self, dataset, p=0.0) -> None:
+        if p > 0.0:
+            LOGGER.info(f"WARNING ⚠️ Using ZZZHideLabel with p={p}")
+            LOGGER.info(f"WARNING ⚠️ Using ZZZHideLabel with p={p}")
+            LOGGER.info(f"WARNING ⚠️ Using ZZZHideLabel with p={p}")
+
+        self.p = p
+
+    def __call__(self, labels):
+        if len(labels["instances"].segments) != 0 or self.p <= 0:
+            return labels
+
+        img = labels["img"]
+        cls = labels["cls"]
+        bbox = labels["instances"].bboxes
+        h, w = img.shape[:2]
+
+        boxes_px = []
+        for box in bbox:
+            x_c, y_c, bw, bh = box
+            x1 = int((x_c - bw / 2) * w)
+            y1 = int((y_c - bh / 2) * h)
+            x2 = int((x_c + bw / 2) * w)
+            y2 = int((y_c + bh / 2) * h)
+            x1 = max(0, x1)
+            y1 = max(0, y1)
+            x2 = min(w, x2)
+            y2 = min(h, y2)
+            boxes_px.append((x1, y1, x2, y2))
+
+        hide_indices = []
+        for idx in range(len(boxes_px)):
+            if random.uniform(0, 1) < self.p:
+                hide_indices.append(idx)
+
+        if not hide_indices:
+            return labels
+
+        hide_set = set(hide_indices)
+
+        for idx in hide_indices:
+            x1, y1, x2, y2 = boxes_px[idx]
+            roi_h = y2 - y1
+            roi_w = x2 - x1
+            if roi_h <= 0 or roi_w <= 0:
+                continue
+
+            mask = np.ones((roi_h, roi_w), dtype=np.uint8)
+            for other_idx, (ox1, oy1, ox2, oy2) in enumerate(boxes_px):
+                if other_idx == idx or other_idx in hide_set:
+                    continue
+                inter_x1 = max(x1, ox1)
+                inter_y1 = max(y1, oy1)
+                inter_x2 = min(x2, ox2)
+                inter_y2 = min(y2, oy2)
+                if inter_x1 < inter_x2 and inter_y1 < inter_y2:
+                    roi_ox1 = inter_x1 - x1
+                    roi_oy1 = inter_y1 - y1
+                    roi_ox2 = inter_x2 - x1
+                    roi_oy2 = inter_y2 - y1
+                    mask[roi_oy1:roi_oy2, roi_ox1:roi_ox2] = 0
+
+            if not np.any(mask == 1):
+                continue
+
+            color = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
+            roi = img[y1:y2, x1:x2]
+            if len(img.shape) == 3 and img.shape[2] == 3:
+                roi[mask == 1] = color
+            else:
+                roi[mask == 1] = color[0]
+            img[y1:y2, x1:x2] = roi
+
+        keep_mask = np.ones(len(cls), dtype=bool)
+        keep_mask[hide_indices] = False
+        labels["cls"] = cls[keep_mask]
+        labels["instances"] = labels["instances"][keep_mask]
 
         return labels
 
