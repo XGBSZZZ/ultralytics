@@ -1,14 +1,17 @@
 # Ultralytics YOLO 🚀, AGPL-3.0 license
 
 import math
+import os
 import random
 from copy import deepcopy
+from multiprocessing.pool import ThreadPool
 from typing import Tuple, Union
 
 import cv2
 import numpy as np
 import torch
 from PIL import Image
+from tqdm import tqdm
 
 from ultralytics.data.utils import polygons2masks, polygons2masks_overlap
 from ultralytics.utils import LOGGER, colorstr
@@ -2306,7 +2309,12 @@ def v8_transforms(dataset, imgsz, hyp, stretch=False):
     # add_zzz
     zzz_add_label_roi_flip = ZZZAddLabelRoiFlip(dataset, hyp.get("fliproi", 0), hyp.get("fliproi_names", []))
     zzz_rotate = ZZZRotate(hyp.get("zzzrotate", 0))
-    zzz_hide_label = ZZZHideLabel(dataset, hyp.get("zzzhide", 0))
+    zzz_hide_label = ZZZHideLabel(
+        dataset,
+        p=hyp.get("zzzhide", 0),
+        image_folder=hyp.get("zzzhide_image_folder", None),
+        zzzhidelist=hyp.get("zzzhidelist", []),
+    )
     pre_transform = Compose([zzz_add_label_roi_flip, zzz_hide_label, zzz_rotate, mosaic, affine])
     if hyp.copy_paste_mode == "flip":
         pre_transform.insert(1, CopyPaste(p=hyp.copy_paste, mode=hyp.copy_paste_mode))
@@ -2540,7 +2548,7 @@ class ZZZAddLabelRoiFlip:
 
 
 class ZZZHideLabel:
-    def __init__(self, dataset, p=0.0) -> None:
+    def __init__(self, dataset, p=0.0, image_folder=None, zzzhidelist=None) -> None:
         if p > 0.0:
             LOGGER.info(f"WARNING ⚠️ Using ZZZHideLabel with p={p}")
             LOGGER.info(f"WARNING ⚠️ Using ZZZHideLabel with p={p}")
@@ -2548,8 +2556,54 @@ class ZZZHideLabel:
 
         self.p = p
 
+        self.zzzhide_indices = set()
+        if zzzhidelist and hasattr(dataset, "data"):
+            classes = dataset.data.get("names", {})
+            for name in zzzhidelist:
+                for i, n in classes.items():
+                    if n == name:
+                        self.zzzhide_indices.add(i)
+
+        self.occ_images = self._load_occ_images(image_folder)
+
+    def _load_occ_images(self, folder):
+        if not folder or not os.path.isdir(folder):
+            return []
+
+        valid_exts = {".jpg", ".jpeg", ".png", ".bmp"}
+        files = [
+            os.path.join(folder, f)
+            for f in os.listdir(folder)
+            if os.path.isfile(os.path.join(folder, f))
+            and os.path.splitext(f)[1].lower() in valid_exts
+        ]
+
+        if not files:
+            LOGGER.warning(f"ZZZHideLabel: no images found in {folder}")
+            return []
+
+        n_threads = min(32, len(files), os.cpu_count() or 8)
+
+        def _proc(f):
+            try:
+                gray = cv2.imread(f, cv2.IMREAD_GRAYSCALE)
+                if gray is not None:
+                    return (f, float(gray.mean()))
+            except Exception:
+                pass
+            return None
+
+        with ThreadPool(n_threads) as pool:
+            results = list(tqdm(pool.imap(_proc, files), total=len(files), desc="Loading ZZZHideLabel occlusion images"))
+
+        results = [r for r in results if r is not None]
+        LOGGER.info(f"ZZZHideLabel: loaded {len(results)} occlusion images")
+        return results
+
     def __call__(self, labels):
         if len(labels["instances"].segments) != 0 or self.p <= 0:
+            return labels
+        if not self.occ_images:
             return labels
 
         img = labels["img"]
@@ -2570,15 +2624,14 @@ class ZZZHideLabel:
             y2 = min(h, y2)
             boxes_px.append((x1, y1, x2, y2))
 
-        hide_indices = []
-        for idx in range(len(boxes_px)):
-            if random.uniform(0, 1) < self.p:
-                hide_indices.append(idx)
+        eligible = [i for i in range(len(cls)) if int(cls[i]) in self.zzzhide_indices]
+        hide_indices = [i for i in eligible if random.uniform(0, 1) < self.p]
 
         if not hide_indices:
             return labels
 
         hide_set = set(hide_indices)
+        img_mean = float(img.mean())
 
         for idx in hide_indices:
             x1, y1, x2, y2 = boxes_px[idx]
@@ -2605,12 +2658,31 @@ class ZZZHideLabel:
             if not np.any(mask == 1):
                 continue
 
-            color = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
+            occ_path = None
+            for _ in range(10):
+                path, occ_mean = random.choice(self.occ_images)
+                if abs(occ_mean - img_mean) <= 30:
+                    occ_path = path
+                    break
+
+            if occ_path is None:
+                continue
+
+            occ_img = cv2.imread(occ_path)
+            if occ_img is None:
+                continue
+            occ_img = cv2.resize(occ_img, (roi_w, roi_h))
+            if occ_img.ndim == 2:
+                occ_img = cv2.cvtColor(occ_img, cv2.COLOR_GRAY2BGR)
+            elif occ_img.shape[2] == 4:
+                occ_img = cv2.cvtColor(occ_img, cv2.COLOR_BGRA2BGR)
+
             roi = img[y1:y2, x1:x2]
             if len(img.shape) == 3 and img.shape[2] == 3:
-                roi[mask == 1] = color
+                mask_3d = np.stack([mask] * 3, axis=-1)
+                roi[mask_3d == 1] = occ_img[mask_3d == 1]
             else:
-                roi[mask == 1] = color[0]
+                roi[mask == 1] = occ_img[mask == 1]
             img[y1:y2, x1:x2] = roi
 
         keep_mask = np.ones(len(cls), dtype=bool)
