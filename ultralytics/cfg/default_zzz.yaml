@@ -134,3 +134,5 @@ zzzrotate: 0.0 # 3个角度的图片旋转
 zzzhide: 0.0 # 随机RGB遮挡标注(仅hbb,每个框独立概率)
 zzzhide_image_folder: # (str, optional) 遮挡图片文件夹路径
 zzzhidelist: [] # 遮盖的标签名列表
+zzzhide_ratio: 1.0 # (float) occlusion coverage ratio (0~1), 1.0=full coverage
+zzzhide_alpha: 1.0 # (float) occlusion image opacity (0~1), 1.0=fully opaque

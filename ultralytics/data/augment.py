@@ -2314,6 +2314,8 @@ def v8_transforms(dataset, imgsz, hyp, stretch=False):
         p=hyp.get("zzzhide", 0),
         image_folder=hyp.get("zzzhide_image_folder", None),
         zzzhidelist=hyp.get("zzzhidelist", []),
+        zzzhide_ratio=hyp.get("zzzhide_ratio", 1.0),
+        zzzhide_alpha=hyp.get("zzzhide_alpha", 1.0),
     )
     pre_transform = Compose([zzz_add_label_roi_flip, zzz_hide_label, zzz_rotate, mosaic, affine])
     if hyp.copy_paste_mode == "flip":
@@ -2548,13 +2550,15 @@ class ZZZAddLabelRoiFlip:
 
 
 class ZZZHideLabel:
-    def __init__(self, dataset, p=0.0, image_folder=None, zzzhidelist=None) -> None:
+    def __init__(self, dataset, p=0.0, image_folder=None, zzzhidelist=None, zzzhide_ratio=1.0, zzzhide_alpha=1.0) -> None:
         if p > 0.0:
-            LOGGER.info(f"WARNING ⚠️ Using ZZZHideLabel with p={p}")
-            LOGGER.info(f"WARNING ⚠️ Using ZZZHideLabel with p={p}")
-            LOGGER.info(f"WARNING ⚠️ Using ZZZHideLabel with p={p}")
+            LOGGER.info(f"WARNING ⚠️ Using ZZZHideLabel with p={p}, ratio={zzzhide_ratio}, alpha={zzzhide_alpha}")
+            LOGGER.info(f"WARNING ⚠️ Using ZZZHideLabel with p={p}, ratio={zzzhide_ratio}, alpha={zzzhide_alpha}")
+            LOGGER.info(f"WARNING ⚠️ Using ZZZHideLabel with p={p}, ratio={zzzhide_ratio}, alpha={zzzhide_alpha}")
 
         self.p = p
+        self.occ_ratio = zzzhide_ratio
+        self.occ_alpha = zzzhide_alpha
 
         self.zzzhide_indices = set()
         if zzzhidelist and hasattr(dataset, "data"):
@@ -2586,9 +2590,9 @@ class ZZZHideLabel:
 
         def _proc(f):
             try:
-                gray = cv2.imread(f, cv2.IMREAD_GRAYSCALE)
-                if gray is not None:
-                    return (f, float(gray.mean()))
+                img = cv2.imread(f, cv2.IMREAD_COLOR)
+                if img is not None:
+                    return (f, tuple(img.mean(axis=(0, 1)).astype(np.float32)))
             except Exception:
                 pass
             return None
@@ -2631,7 +2635,6 @@ class ZZZHideLabel:
             return labels
 
         hide_set = set(hide_indices)
-        img_mean = float(img.mean())
 
         for idx in hide_indices:
             x1, y1, x2, y2 = boxes_px[idx]
@@ -2655,18 +2658,34 @@ class ZZZHideLabel:
                     roi_oy2 = inter_y2 - y1
                     mask[roi_oy1:roi_oy2, roi_ox1:roi_ox2] = 0
 
+            if self.occ_ratio < 1.0:
+                target_area = max(1, int(roi_h * roi_w * self.occ_ratio))
+                ar = roi_w / roi_h
+                rect_h = max(1, min(roi_h, int(math.sqrt(target_area / ar))))
+                rect_w = max(1, min(roi_w, int(rect_h * ar)))
+                while rect_h * rect_w < target_area and (rect_h < roi_h or rect_w < roi_w):
+                    if rect_h < roi_h:
+                        rect_h += 1
+                    if rect_w < roi_w:
+                        rect_w += 1
+                rx = random.randint(0, roi_w - rect_w) if roi_w > rect_w else 0
+                ry = random.randint(0, roi_h - rect_h) if roi_h > rect_h else 0
+                new_mask = np.zeros((roi_h, roi_w), dtype=np.uint8)
+                new_mask[ry:ry + rect_h, rx:rx + rect_w] = 1
+                mask = new_mask & mask
+
             if not np.any(mask == 1):
                 continue
 
-            occ_path = None
-            for _ in range(10):
-                path, occ_mean = random.choice(self.occ_images)
-                if abs(occ_mean - img_mean) <= 30:
-                    occ_path = path
-                    break
+            roi = img[y1:y2, x1:x2]
+            roi_mean = roi.mean(axis=(0, 1))
 
-            if occ_path is None:
-                continue
+            sample_size = max(1, len(self.occ_images) // 100)
+            sample = random.sample(self.occ_images, sample_size)
+            occ_path, _ = min(
+                sample,
+                key=lambda x: sum(abs(roi_mean[c] - x[1][c]) for c in range(3))
+            )
 
             occ_img = cv2.imread(occ_path)
             if occ_img is None:
@@ -2680,9 +2699,21 @@ class ZZZHideLabel:
             roi = img[y1:y2, x1:x2]
             if len(img.shape) == 3 and img.shape[2] == 3:
                 mask_3d = np.stack([mask] * 3, axis=-1)
-                roi[mask_3d == 1] = occ_img[mask_3d == 1]
+                alpha = self.occ_alpha
+                if alpha >= 1.0:
+                    roi[mask_3d == 1] = occ_img[mask_3d == 1]
+                else:
+                    roi[mask_3d == 1] = (
+                        roi[mask_3d == 1] * (1.0 - alpha) + occ_img[mask_3d == 1] * alpha
+                    ).astype(roi.dtype)
             else:
-                roi[mask == 1] = occ_img[mask == 1]
+                alpha = self.occ_alpha
+                if alpha >= 1.0:
+                    roi[mask == 1] = occ_img[mask == 1]
+                else:
+                    roi[mask == 1] = (
+                        roi[mask == 1] * (1.0 - alpha) + occ_img[mask == 1] * alpha
+                    ).astype(roi.dtype)
             img[y1:y2, x1:x2] = roi
 
         keep_mask = np.ones(len(cls), dtype=bool)
